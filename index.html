@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Naeem Izhaar Tool</title>
+    <style>
+        body {
+            font-family: Calibri, sans-serif;
+            background-color: #E8ECEF;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .main-frame {
+            background-color: #FFFFFF;
+            border: 5px solid #FFFFFF;
+            padding: 20px;
+            flex: 1;
+            overflow-y: auto;
+        }
+        .header {
+            background-color: #0078D7;
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            padding: 10px;
+            text-align: center;
+        }
+        .sub-header {
+            display: flex;
+            align-items: center;
+            padding: 5px 0;
+        }
+        .sub-header .ni-label {
+            color: #0078D7;
+            font-size: 14px;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        .sub-header .mode-label {
+            color: #333333;
+            font-size: 12px;
+            font-style: italic;
+            margin-right: 5px;
+        }
+        .sub-header select {
+            font-size: 10px;
+            padding: 5px;
+        }
+        .link-entry {
+            width: 100%;
+            padding: 10px;
+            font-size: 12px;
+            background-color: #F0F0F0;
+            border: 2px solid #0078D7;
+            margin: 10px 0;
+        }
+        .button-frame {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+        button {
+            padding: 6px 12px;
+            font-size: 10px;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+        }
+        .add-btn { background-color: #0078D7; color: white; }
+        .add-btn:hover { background-color: #005BB5; }
+        .delete-btn { background-color: #FF4444; color: white; }
+        .delete-btn:hover { background-color: #CC0000; }
+        .import-btn { background-color: #0078D7; color: white; }
+        .import-btn:hover { background-color: #005BB5; }
+        .save-btn { background-color: #0078D7; color: white; }
+        .save-btn:hover { background-color: #005BB5; }
+        .start-btn { background-color: #28A745; color: white; }
+        .start-btn:hover { background-color: #218838; }
+        .links-list {
+            width: 100%;
+            height: 100px;
+            background-color: #F0F0F0;
+            border: 2px solid #333333;
+            padding: 5px;
+            margin: 10px 0;
+            overflow-y: auto;
+        }
+        .status-label {
+            font-size: 12px;
+            font-weight: bold;
+            color: #333333;
+            margin: 5px 0;
+        }
+        .progress {
+            width: 100%;
+            margin: 5px 0;
+        }
+        progress {
+            width: 100%;
+            height: 20px;
+        }
+        .info-frame {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+        }
+        .info-label {
+            font-size: 10px;
+            color: #333333;
+            margin: 0 5px;
+        }
+        .log-text {
+            width: 100%;
+            height: 200px;
+            background-color: #F0F0F0;
+            border: 2px solid #333333;
+            padding: 5px;
+            margin: 10px 0;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+        .error-message {
+            color: red;
+            font-weight: bold;
+        }
+        .footer {
+            background-color: #0078D7;
+            color: white;
+            font-size: 10px;
+            font-style: italic;
+            padding: 5px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="main-frame">
+        <div class="header">Naeem Izhaar Tool</div>
+        <div class="sub-header">
+            <div class="ni-label">Ni Communication Zone</div>
+            <div class="mode-label">Download Mode:</div>
+            <select id="mode" onchange="setMode()">
+                <option value="Unlimited Downloader" {{ 'selected' if mode == 'Unlimited Downloader' }}>Unlimited Downloader</option>
+                <option value="24 Hours Downloader" {{ 'selected' if mode == '24 Hours Downloader' }}>24 Hours Downloader</option>
+            </select>
+        </div>
+        
+        <input type="text" class="link-entry" id="link" placeholder="Enter YouTube link">
+        <div class="button-frame">
+            <button class="add-btn" onclick="addLink()">Add Link</button>
+            <button class="delete-btn" onclick="deleteLink()">Delete Selected Link</button>
+            <button class="import-btn" onclick="importLinks()">Import Links</button>
+            <button class="save-btn" onclick="savePath()">Save As</button>
+        </div>
+        
+        <div class="links-list" id="links">
+            {% for link in links %}
+                <div>{{ link }}</div>
+            {% endfor %}
+        </div>
+        
+        <button class="start-btn" onclick="startDownload()">Start Download</button>
+        
+        <div class="status-label" id="status">Ready to download...</div>
+        <div class="progress">
+            <progress id="progress" value="0" max="100"></progress>
+        </div>
+        <div class="info-frame">
+            <div class="info-label" id="size">File Size: 0 MB</div>
+            <div class="info-label" id="percent">Downloaded: 0%</div>
+            <div class="info-label" id="speed">Transfer Rate: 0 KB/s</div>
+            <div class="info-label" id="eta">Time Left: N/A</div>
+        </div>
+        
+        <div class="log-text" id="log"></div>
+    </div>
+    
+    <div class="footer">
+        Email: Naeemizhaar@gmail.com | Contact: +923160923196
+    </div>
+
+    <script src="/static/socket.io.min.js"></script>
+    <script>
+        let downloadActive = false;
+        const socket = io();
+
+        // Debug WebSocket connection
+        socket.on('connect', function() {
+            console.log('WebSocket connected');
+            logMessage('WebSocket connected');
+        });
+
+        socket.on('disconnect', function() {
+            console.log('WebSocket disconnected');
+            logMessage('WebSocket disconnected');
+        });
+
+        socket.on('progress_update', function(data) {
+            console.log('Received progress_update:', data);  // Debug log
+            if (data.percent) {
+                document.getElementById('percent').innerText = `Downloaded: ${data.percent}%`;
+                document.getElementById('progress').value = parseFloat(data.percent) || 0;
+            }
+            if (data.speed) document.getElementById('speed').innerText = `Transfer Rate: ${data.speed}`;
+            if (data.eta) document.getElementById('eta').innerText = `Time Left: ${data.eta}s`;
+            if (data.size) document.getElementById('size').innerText = `File Size: ${data.size}`;
+            if (data.message) {
+                if (data.message.includes('Error') || data.message.includes('ERROR')) {
+                    logMessage(`<span class="error-message">${data.message}</span>`);
+                } else {
+                    logMessage(data.message);
+                }
+                if (data.message.includes('complete') || data.message.includes('Error')) {
+                    document.getElementById('status').innerText = data.message;
+                    downloadActive = false;
+                }
+            }
+        });
+
+        async function addLink() {
+            const link = document.getElementById('link').value;
+            const response = await fetch('/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `link=${encodeURIComponent(link)}`
+            });
+            const data = await response.json();
+            document.getElementById('status').innerText = data.message;
+            if (!data.message.includes("Invalid")) {
+                updateLinks(data.links);
+                document.getElementById('link').value = '';
+            }
+            logMessage(data.message);
+        }
+
+        async function deleteLink() {
+            const links = document.querySelectorAll('#links div');
+            if (links.length === 0) {
+                document.getElementById('status').innerText = "No links to delete";
+                logMessage("No links to delete");
+                return;
+            }
+            const index = 0;
+            const response = await fetch('/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `index=${index}`
+            });
+            const data = await response.json();
+            document.getElementById('status').innerText = data.message;
+            updateLinks(data.links);
+            logMessage(data.message);
+        }
+
+        async function importLinks() {
+            document.getElementById('status').innerText = "Import feature not implemented yet";
+            logMessage("Import feature not implemented yet");
+        }
+
+        async function savePath() {
+            document.getElementById('status').innerText = "Save As feature not implemented yet";
+            logMessage("Save As feature not implemented yet");
+        }
+
+        async function setMode() {
+            const mode = document.getElementById('mode').value;
+            const response = await fetch('/set_mode', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `mode=${encodeURIComponent(mode)}`
+            });
+            const data = await response.json();
+            document.getElementById('status').innerText = data.message;
+            logMessage(data.message);
+        }
+
+        async function startDownload() {
+            if (downloadActive || document.querySelectorAll('#links div').length === 0) {
+                document.getElementById('status').innerText = "Download running or no links!";
+                logMessage("Download running or no links!");
+                return;
+            }
+            downloadActive = true;
+            document.getElementById('status').innerText = "Starting download...";
+            logMessage("Starting download...");
+            const response = await fetch('/start_download', { method: 'POST' });
+            const data = await response.json();
+            document.getElementById('status').innerText = data.message;
+            logMessage(data.message);
+        }
+
+        function updateLinks(links) {
+            const list = document.getElementById('links');
+            list.innerHTML = links.map(link => `<div>${link}</div>`).join('');
+        }
+
+        function logMessage(message) {
+            const log = document.getElementById('log');
+            log.innerHTML += `${message}<br>`;
+            log.scrollTop = log.scrollHeight;
+        }
+    </script>
+</body>
+</html>
